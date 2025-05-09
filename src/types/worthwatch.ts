@@ -27,6 +27,7 @@ export const SUPPORTED_CURRENCIES: Currency[] = [
   { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
   { code: 'CAD', symbol: '$', name: 'Canadian Dollar' }, // Note: CAD symbol is often C$ or $
   { code: 'AUD', symbol: '$', name: 'Australian Dollar' }, // Note: AUD symbol is often A$ or $
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
 ];
 
 export interface AppData {
@@ -57,4 +58,3 @@ export const LIABILITY_TYPES = [
 
 export type AssetType = typeof ASSET_TYPES[number]['value'];
 export type LiabilityType = typeof LIABILITY_TYPES[number]['value'];
-
