@@ -1,21 +1,26 @@
+
 import type { FC } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Icon } from '@/components/icons';
 
 interface NetWorthDisplayProps {
-  netWorth: number;
-  totalAssets: number;
-  totalLiabilities: number;
-  currency: string;
+  netWorth: number; // Value is expected to be in the `currency` specified
+  totalAssets: number; // Value is expected to be in the `currency` specified
+  totalLiabilities: number; // Value is expected to be in the `currency` specified
+  currency: string; // The display currency code (e.g., "USD", "INR")
 }
 
 const NetWorthDisplay: FC<NetWorthDisplayProps> = ({ netWorth, totalAssets, totalLiabilities, currency }) => {
+  // This component now assumes the passed values (netWorth, totalAssets, totalLiabilities)
+  // are ALREADY in the 'currency' (display currency).
+  // Conversion from BASE_CURRENCY to display currency happens in the parent (page.tsx).
+
   const formatCurrency = (value: number) => {
     try {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(value);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     } catch (error) {
-      console.warn(`Invalid currency code: ${currency}. Falling back to USD display.`);
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+      console.warn(`Invalid currency code for formatting: ${currency}. Falling back to USD display style.`);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
     }
   };
 

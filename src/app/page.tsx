@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
 import useLocalStorage from '@/hooks/useLocalStorage';
-import type { AppData, Asset, Liability, NetWorthRecord, Currency } from '@/types/worthwatch';
+import type { AppData, Asset, Liability, NetWorthRecord } from '@/types/worthwatch';
 import { SUPPORTED_CURRENCIES } from '@/types/worthwatch';
 import Header from '@/components/worthwatch/Header';
 import NetWorthDisplay from '@/components/worthwatch/NetWorthDisplay';
@@ -12,12 +13,13 @@ import NetWorthGraph from '@/components/worthwatch/NetWorthGraph';
 import CurrencySelector from '@/components/worthwatch/CurrencySelector';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from '@/components/ui/button';
+import { BASE_CURRENCY, convertAmount } from '@/lib/currencyUtils';
 
 const initialAppData: AppData = {
-  assets: [],
-  liabilities: [],
-  history: [],
-  currency: 'USD', // Default currency
+  assets: [], // Values will be stored in BASE_CURRENCY (USD)
+  liabilities: [], // Values will be stored in BASE_CURRENCY (USD)
+  history: [], // NetWorth will be stored in BASE_CURRENCY (USD)
+  currency: 'USD', // Default display currency
 };
 
 export default function WorthWatchPage() {
@@ -29,15 +31,16 @@ export default function WorthWatchPage() {
     setIsClient(true);
   }, []);
 
-  const totalAssets = useMemo(() => appData.assets.reduce((sum, asset) => sum + asset.value, 0), [appData.assets]);
-  const totalLiabilities = useMemo(() => appData.liabilities.reduce((sum, liability) => sum + liability.value, 0), [appData.liabilities]);
-  const netWorth = useMemo(() => totalAssets - totalLiabilities, [totalAssets, totalLiabilities]);
+  // All calculations are done in BASE_CURRENCY
+  const totalAssetsInBase = useMemo(() => appData.assets.reduce((sum, asset) => sum + asset.value, 0), [appData.assets]);
+  const totalLiabilitiesInBase = useMemo(() => appData.liabilities.reduce((sum, liability) => sum + liability.value, 0), [appData.liabilities]);
+  const netWorthInBase = useMemo(() => totalAssetsInBase - totalLiabilitiesInBase, [totalAssetsInBase, totalLiabilitiesInBase]);
 
-  const updateHistory = (currentNetWorth: number) => {
+  const updateHistory = (currentNetWorthInBase: number) => {
     const today = new Date().toISOString().split('T')[0];
     
     setAppData(prevData => {
-      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: currentNetWorth };
+      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: currentNetWorthInBase }; // Stored in BASE_CURRENCY
       let updatedHistory = [...prevData.history];
 
       const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
@@ -52,21 +55,33 @@ export default function WorthWatchPage() {
     });
   };
   
-  const handleAddItem = (item: Asset | Liability, itemKind: 'asset' | 'liability') => {
+  const handleAddItem = (itemData: Omit<Asset | Liability, 'id' | 'dateAdded'>, itemKind: 'asset' | 'liability') => {
+    // itemData.value is in the current display currency (appData.currency)
+    const valueInBaseCurrency = convertAmount(itemData.value, appData.currency, BASE_CURRENCY);
+
+    const newItem = {
+      ...itemData,
+      id: Date.now().toString(),
+      value: valueInBaseCurrency, // Store value in BASE_CURRENCY
+      dateAdded: new Date().toISOString(),
+    };
+
     setAppData(prevData => {
       const updatedData = { ...prevData };
       if (itemKind === 'asset') {
-        updatedData.assets = [...prevData.assets, item as Asset];
+        updatedData.assets = [...prevData.assets, newItem as Asset];
       } else {
-        updatedData.liabilities = [...prevData.liabilities, item as Liability];
+        updatedData.liabilities = [...prevData.liabilities, newItem as Liability];
       }
-      const newTotalAssets = itemKind === 'asset' ? (prevData.assets.reduce((sum, asset) => sum + asset.value, 0)) + item.value : (prevData.assets.reduce((sum, asset) => sum + asset.value, 0));
-      const newTotalLiabilities = itemKind === 'liability' ? (prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0)) + item.value : (prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0));
+
+      // Recalculate totals in BASE_CURRENCY
+      const newTotalAssetsInBase = updatedData.assets.reduce((sum, asset) => sum + asset.value, 0);
+      const newTotalLiabilitiesInBase = updatedData.liabilities.reduce((sum, liability) => sum + liability.value, 0);
+      const newNetWorthInBase = newTotalAssetsInBase - newTotalLiabilitiesInBase;
       
-      const newNetWorth = newTotalAssets - newTotalLiabilities;
-      // updateHistory will be called inside this new state update to ensure it has the latest netWorth
+      // Update history with BASE_CURRENCY net worth
       const today = new Date().toISOString().split('T')[0];
-      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorth };
+      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorthInBase };
       let updatedHistory = [...prevData.history];
       const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
       if (todayEntryIndex !== -1) {
@@ -79,31 +94,26 @@ export default function WorthWatchPage() {
 
       return updatedData;
     });
-    toast({ title: `${itemKind === 'asset' ? 'Asset' : 'Liability'} added`, description: `"${item.name}" has been successfully added.` });
+    toast({ title: `${itemKind === 'asset' ? 'Asset' : 'Liability'} added`, description: `"${newItem.name}" has been successfully added.` });
   };
 
   const handleDeleteItem = (id: string, itemKind: 'asset' | 'liability') => {
     setAppData(prevData => {
       const updatedData = { ...prevData };
-      let itemValue = 0;
-      let currentTotalAssets = prevData.assets.reduce((sum, asset) => sum + asset.value, 0);
-      let currentTotalLiabilities = prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0);
-
       if (itemKind === 'asset') {
-        const assetToRemove = prevData.assets.find(a => a.id === id);
-        if (assetToRemove) itemValue = assetToRemove.value;
         updatedData.assets = prevData.assets.filter(asset => asset.id !== id);
-        currentTotalAssets -= itemValue;
       } else {
-        const liabilityToRemove = prevData.liabilities.find(l => l.id === id);
-        if (liabilityToRemove) itemValue = liabilityToRemove.value;
         updatedData.liabilities = prevData.liabilities.filter(liability => liability.id !== id);
-        currentTotalLiabilities -= itemValue;
       }
       
-      const newNetWorth = currentTotalAssets - currentTotalLiabilities;
+      // Recalculate totals in BASE_CURRENCY
+      const newTotalAssetsInBase = updatedData.assets.reduce((sum, asset) => sum + asset.value, 0);
+      const newTotalLiabilitiesInBase = updatedData.liabilities.reduce((sum, liability) => sum + liability.value, 0);
+      const newNetWorthInBase = newTotalAssetsInBase - newTotalLiabilitiesInBase;
+
+      // Update history with BASE_CURRENCY net worth
       const today = new Date().toISOString().split('T')[0];
-      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorth };
+      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorthInBase };
       let updatedHistory = [...prevData.history];
       const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
       if (todayEntryIndex !== -1) {
@@ -125,7 +135,7 @@ export default function WorthWatchPage() {
   };
 
   const handleManualSnapshot = () => {
-    updateHistory(netWorth);
+    updateHistory(netWorthInBase); // Pass netWorthInBase
     toast({ title: "Net Worth Snapshot Created", description: "Current net worth has been recorded in history." });
   };
 
@@ -139,6 +149,12 @@ export default function WorthWatchPage() {
       </div>
     );
   }
+  
+  // Convert base currency values to display currency for passing to components
+  const netWorthForDisplay = convertAmount(netWorthInBase, BASE_CURRENCY, appData.currency);
+  const totalAssetsForDisplay = convertAmount(totalAssetsInBase, BASE_CURRENCY, appData.currency);
+  const totalLiabilitiesForDisplay = convertAmount(totalLiabilitiesInBase, BASE_CURRENCY, appData.currency);
+
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -146,7 +162,12 @@ export default function WorthWatchPage() {
       <main className="container mx-auto p-4 md:p-8 space-y-8 flex-grow">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
           <div className="md:col-span-2">
-            <NetWorthDisplay netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities} currency={appData.currency} />
+            <NetWorthDisplay 
+              netWorth={netWorthForDisplay} 
+              totalAssets={totalAssetsForDisplay} 
+              totalLiabilities={totalLiabilitiesForDisplay} 
+              currency={appData.currency} 
+            />
           </div>
           <div className="md:col-span-1">
             <CurrencySelector
@@ -157,18 +178,23 @@ export default function WorthWatchPage() {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> {/* Changed lg:grid-cols-3 to lg:grid-cols-2 */}
-          <div className="lg:col-span-1"> {/* This will take full width on smaller screens, half on large */}
-             <AssetLiabilityForm onAddItem={handleAddItem} currency={appData.currency} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="lg:col-span-1">
+             <AssetLiabilityForm 
+               onAddItem={(itemData, itemKind) => handleAddItem(itemData, itemKind)} 
+               currency={appData.currency} 
+              />
           </div>
-          {/* FinancialTips component removed */}
-          <div className="lg:col-span-1"> {/* This will take full width on smaller screens, half on large */}
+          <div className="lg:col-span-1">
+            {/* Pass history (netWorth in BASE_CURRENCY) and display currency to graph */}
             <NetWorthGraph history={appData.history} currency={appData.currency} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Pass assets (values in BASE_CURRENCY) and display currency to list */}
           <ItemsList items={appData.assets} itemKind="asset" onDeleteItem={handleDeleteItem} currency={appData.currency} />
+          {/* Pass liabilities (values in BASE_CURRENCY) and display currency to list */}
           <ItemsList items={appData.liabilities} itemKind="liability" onDeleteItem={handleDeleteItem} currency={appData.currency} />
         </div>
         

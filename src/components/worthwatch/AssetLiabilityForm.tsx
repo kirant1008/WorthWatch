@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { FC } from 'react';
@@ -17,15 +18,15 @@ import { Icon } from '@/components/icons';
 const formSchema = z.object({
   itemKind: z.enum(['asset', 'liability']),
   name: z.string().min(1, "Name is required"),
-  value: z.coerce.number().positive("Value must be positive"),
+  value: z.coerce.number().positive("Value must be positive"), // Value is entered in display currency
   type: z.string().min(1, "Type is required"),
 });
 
 type FormData = z.infer<typeof formSchema>;
 
 interface AssetLiabilityFormProps {
-  onAddItem: (item: Asset | Liability, itemKind: 'asset' | 'liability') => void;
-  currency: string;
+  onAddItem: (itemData: Omit<Asset | Liability, 'id' | 'dateAdded'>, itemKind: 'asset' | 'liability') => void;
+  currency: string; // Display currency
 }
 
 const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem, currency }) => {
@@ -43,14 +44,13 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem, currency }
   const itemTypes = itemKind === 'asset' ? ASSET_TYPES : LIABILITY_TYPES;
 
   const onSubmit = (data: FormData) => {
-    const newItem = {
-      id: Date.now().toString(),
+    // Pass only essential data; id, dateAdded, and conversion to base currency are handled by parent
+    const itemData = {
       name: data.name,
-      value: data.value,
+      value: data.value, // This value is in the display currency
       type: data.type,
-      dateAdded: new Date().toISOString(),
     };
-    onAddItem(newItem, data.itemKind);
+    onAddItem(itemData, data.itemKind);
     reset();
   };
 
@@ -72,8 +72,7 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem, currency }
               <RadioGroup
                 onValueChange={(value) => {
                   field.onChange(value);
-                  // Optionally reset type when kind changes
-                  // resetField('type'); 
+                  // resetField('type'); // Consider resetting type if kind changes and types are incompatible
                 }}
                 defaultValue={field.value}
                 className="flex space-x-4"
@@ -108,7 +107,7 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem, currency }
               name="type"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} value={field.value} key={itemKind} /* Add key to re-render Select on itemKind change */ >
+                <Select onValueChange={field.onChange} value={field.value} key={itemKind} >
                   <SelectTrigger id="type">
                     <SelectValue placeholder={`Select a ${itemKind} type`} />
                   </SelectTrigger>
