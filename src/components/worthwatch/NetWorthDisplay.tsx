@@ -6,11 +6,17 @@ interface NetWorthDisplayProps {
   netWorth: number;
   totalAssets: number;
   totalLiabilities: number;
+  currency: string;
 }
 
-const NetWorthDisplay: FC<NetWorthDisplayProps> = ({ netWorth, totalAssets, totalLiabilities }) => {
+const NetWorthDisplay: FC<NetWorthDisplayProps> = ({ netWorth, totalAssets, totalLiabilities, currency }) => {
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(value);
+    } catch (error) {
+      console.warn(`Invalid currency code: ${currency}. Falling back to USD display.`);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    }
   };
 
   return (
@@ -35,7 +41,7 @@ const NetWorthDisplay: FC<NetWorthDisplayProps> = ({ netWorth, totalAssets, tota
           </div>
           <div>
             <CardDescription className="flex items-center mb-1">
-              <Icon name="TrendingDown" className="mr-2 h-5 w-5 text-red-500" /> {/* Assuming TrendingDown exists or use ShieldAlert */}
+              <Icon name="TrendingDown" className="mr-2 h-5 w-5 text-red-500" />
               Total Liabilities
             </CardDescription>
             <p className="font-semibold">{formatCurrency(totalLiabilities)}</p>

@@ -14,11 +14,26 @@ export interface NetWorthRecord {
   netWorth: number;
 }
 
+export interface Currency {
+  code: string; // e.g., "USD"
+  symbol: string; // e.g., "$"
+  name: string; // e.g., "US Dollar"
+}
+
+export const SUPPORTED_CURRENCIES: Currency[] = [
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'CAD', symbol: '$', name: 'Canadian Dollar' }, // Note: CAD symbol is often C$ or $
+  { code: 'AUD', symbol: '$', name: 'Australian Dollar' }, // Note: AUD symbol is often A$ or $
+];
+
 export interface AppData {
   assets: Asset[];
   liabilities: Liability[];
   history: NetWorthRecord[];
-  financialGoals: string;
+  currency: string; // e.g., "USD"
 }
 
 export const ASSET_TYPES = [
@@ -42,3 +57,4 @@ export const LIABILITY_TYPES = [
 
 export type AssetType = typeof ASSET_TYPES[number]['value'];
 export type LiabilityType = typeof LIABILITY_TYPES[number]['value'];
+

@@ -2,21 +2,22 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import useLocalStorage from '@/hooks/useLocalStorage';
-import type { AppData, Asset, Liability, NetWorthRecord } from '@/types/worthwatch';
+import type { AppData, Asset, Liability, NetWorthRecord, Currency } from '@/types/worthwatch';
+import { SUPPORTED_CURRENCIES } from '@/types/worthwatch';
 import Header from '@/components/worthwatch/Header';
 import NetWorthDisplay from '@/components/worthwatch/NetWorthDisplay';
 import AssetLiabilityForm from '@/components/worthwatch/AssetLiabilityForm';
 import ItemsList from '@/components/worthwatch/ItemsList';
 import NetWorthGraph from '@/components/worthwatch/NetWorthGraph';
-import FinancialTips from '@/components/worthwatch/FinancialTips';
+import CurrencySelector from '@/components/worthwatch/CurrencySelector';
 import { useToast } from "@/hooks/use-toast";
-import { Button } from '@/components/ui/button'; // For manual snapshot
+import { Button } from '@/components/ui/button';
 
 const initialAppData: AppData = {
   assets: [],
   liabilities: [],
   history: [],
-  financialGoals: "",
+  currency: 'USD', // Default currency
 };
 
 export default function WorthWatchPage() {
@@ -41,13 +42,10 @@ export default function WorthWatchPage() {
 
       const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
       if (todayEntryIndex !== -1) {
-        // Update today's entry if it exists
         updatedHistory[todayEntryIndex] = newHistoryEntry;
       } else {
-        // Add new entry
         updatedHistory.push(newHistoryEntry);
       }
-      // Keep history sorted by date (optional, graph can sort too)
       updatedHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
       return { ...prevData, history: updatedHistory };
@@ -62,9 +60,23 @@ export default function WorthWatchPage() {
       } else {
         updatedData.liabilities = [...prevData.liabilities, item as Liability];
       }
-      const newTotalAssets = itemKind === 'asset' ? totalAssets + item.value : totalAssets;
-      const newTotalLiabilities = itemKind === 'liability' ? totalLiabilities + item.value : totalLiabilities;
-      updateHistory(newTotalAssets - newTotalLiabilities); // Update history after state is set
+      const newTotalAssets = itemKind === 'asset' ? (prevData.assets.reduce((sum, asset) => sum + asset.value, 0)) + item.value : (prevData.assets.reduce((sum, asset) => sum + asset.value, 0));
+      const newTotalLiabilities = itemKind === 'liability' ? (prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0)) + item.value : (prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0));
+      
+      const newNetWorth = newTotalAssets - newTotalLiabilities;
+      // updateHistory will be called inside this new state update to ensure it has the latest netWorth
+      const today = new Date().toISOString().split('T')[0];
+      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorth };
+      let updatedHistory = [...prevData.history];
+      const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
+      if (todayEntryIndex !== -1) {
+        updatedHistory[todayEntryIndex] = newHistoryEntry;
+      } else {
+        updatedHistory.push(newHistoryEntry);
+      }
+      updatedHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      updatedData.history = updatedHistory;
+
       return updatedData;
     });
     toast({ title: `${itemKind === 'asset' ? 'Asset' : 'Liability'} added`, description: `"${item.name}" has been successfully added.` });
@@ -74,25 +86,42 @@ export default function WorthWatchPage() {
     setAppData(prevData => {
       const updatedData = { ...prevData };
       let itemValue = 0;
+      let currentTotalAssets = prevData.assets.reduce((sum, asset) => sum + asset.value, 0);
+      let currentTotalLiabilities = prevData.liabilities.reduce((sum, liability) => sum + liability.value, 0);
+
       if (itemKind === 'asset') {
         const assetToRemove = prevData.assets.find(a => a.id === id);
         if (assetToRemove) itemValue = assetToRemove.value;
         updatedData.assets = prevData.assets.filter(asset => asset.id !== id);
+        currentTotalAssets -= itemValue;
       } else {
         const liabilityToRemove = prevData.liabilities.find(l => l.id === id);
         if (liabilityToRemove) itemValue = liabilityToRemove.value;
         updatedData.liabilities = prevData.liabilities.filter(liability => liability.id !== id);
+        currentTotalLiabilities -= itemValue;
       }
-      const newTotalAssets = itemKind === 'asset' ? totalAssets - itemValue : totalAssets;
-      const newTotalLiabilities = itemKind === 'liability' ? totalLiabilities - itemValue : totalLiabilities;
-      updateHistory(newTotalAssets - newTotalLiabilities);
+      
+      const newNetWorth = currentTotalAssets - currentTotalLiabilities;
+      const today = new Date().toISOString().split('T')[0];
+      const newHistoryEntry: NetWorthRecord = { date: today, netWorth: newNetWorth };
+      let updatedHistory = [...prevData.history];
+      const todayEntryIndex = updatedHistory.findIndex(entry => entry.date === today);
+      if (todayEntryIndex !== -1) {
+        updatedHistory[todayEntryIndex] = newHistoryEntry;
+      } else {
+        updatedHistory.push(newHistoryEntry);
+      }
+      updatedHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      updatedData.history = updatedHistory;
+
       return updatedData;
     });
     toast({ title: `${itemKind === 'asset' ? 'Asset' : 'Liability'} deleted`, description: `The item has been successfully deleted.`, variant: "destructive" });
   };
   
-  const handleUpdateFinancialGoals = (goals: string) => {
-    setAppData(prevData => ({ ...prevData, financialGoals: goals }));
+  const handleSetCurrency = (currencyCode: string) => {
+    setAppData(prevData => ({ ...prevData, currency: currencyCode }));
+    toast({ title: "Currency Updated", description: `Display currency set to ${currencyCode}.` });
   };
 
   const handleManualSnapshot = () => {
@@ -100,16 +129,7 @@ export default function WorthWatchPage() {
     toast({ title: "Net Worth Snapshot Created", description: "Current net worth has been recorded in history." });
   };
 
-  // Effect to update history whenever netWorth changes (debounced or throttled in a real app if too frequent)
-  // For this version, it updates on add/delete. A manual snapshot button is also good.
-  // useEffect(() => {
-  //  if(isClient) updateHistory(netWorth);
-  //}, [netWorth, isClient]); // Careful with this, might run too often. Controlled updates are better.
-
-
   if (!isClient) {
-    // Render a loading state or null on the server to avoid hydration mismatch
-    // as localStorage is not available on the server.
     return (
       <div className="flex flex-col min-h-screen">
         <Header />
@@ -124,29 +144,34 @@ export default function WorthWatchPage() {
     <div className="flex flex-col min-h-screen bg-background">
       <Header />
       <main className="container mx-auto p-4 md:p-8 space-y-8 flex-grow">
-        <NetWorthDisplay netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities} />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-             <AssetLiabilityForm onAddItem={handleAddItem} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+          <div className="md:col-span-2">
+            <NetWorthDisplay netWorth={netWorth} totalAssets={totalAssets} totalLiabilities={totalLiabilities} currency={appData.currency} />
           </div>
-          <div className="lg:col-span-2">
-            <FinancialTips 
-              totalAssets={totalAssets} 
-              totalLiabilities={totalLiabilities}
-              currentFinancialGoals={appData.financialGoals}
-              onUpdateFinancialGoals={handleUpdateFinancialGoals}
+          <div className="md:col-span-1">
+            <CurrencySelector
+                selectedCurrency={appData.currency}
+                onCurrencyChange={handleSetCurrency}
+                currencies={SUPPORTED_CURRENCIES}
             />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> {/* Changed lg:grid-cols-3 to lg:grid-cols-2 */}
+          <div className="lg:col-span-1"> {/* This will take full width on smaller screens, half on large */}
+             <AssetLiabilityForm onAddItem={handleAddItem} currency={appData.currency} />
+          </div>
+          {/* FinancialTips component removed */}
+          <div className="lg:col-span-1"> {/* This will take full width on smaller screens, half on large */}
+            <NetWorthGraph history={appData.history} currency={appData.currency} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <ItemsList items={appData.assets} itemKind="asset" onDeleteItem={handleDeleteItem} />
-          <ItemsList items={appData.liabilities} itemKind="liability" onDeleteItem={handleDeleteItem} />
+          <ItemsList items={appData.assets} itemKind="asset" onDeleteItem={handleDeleteItem} currency={appData.currency} />
+          <ItemsList items={appData.liabilities} itemKind="liability" onDeleteItem={handleDeleteItem} currency={appData.currency} />
         </div>
         
-        <NetWorthGraph history={appData.history} />
-
         <div className="text-center mt-4">
             <Button onClick={handleManualSnapshot} variant="outline">
                 Create Net Worth Snapshot

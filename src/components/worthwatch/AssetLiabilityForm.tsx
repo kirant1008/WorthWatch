@@ -25,9 +25,10 @@ type FormData = z.infer<typeof formSchema>;
 
 interface AssetLiabilityFormProps {
   onAddItem: (item: Asset | Liability, itemKind: 'asset' | 'liability') => void;
+  currency: string;
 }
 
-const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem }) => {
+const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem, currency }) => {
   const { register, handleSubmit, control, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -69,7 +70,11 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem }) => {
             control={control}
             render={({ field }) => (
               <RadioGroup
-                onValueChange={field.onChange}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  // Optionally reset type when kind changes
+                  // resetField('type'); 
+                }}
                 defaultValue={field.value}
                 className="flex space-x-4"
               >
@@ -92,7 +97,7 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem }) => {
           </div>
 
           <div>
-            <Label htmlFor="value">Value (USD)</Label>
+            <Label htmlFor="value">Value ({currency})</Label>
             <Input id="value" type="number" step="0.01" {...register('value')} placeholder="e.g., 5000.00" />
             {errors.value && <p className="text-sm text-destructive mt-1">{errors.value.message}</p>}
           </div>
@@ -103,7 +108,7 @@ const AssetLiabilityForm: FC<AssetLiabilityFormProps> = ({ onAddItem }) => {
               name="type"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} key={itemKind} /* Add key to re-render Select on itemKind change */ >
                   <SelectTrigger id="type">
                     <SelectValue placeholder={`Select a ${itemKind} type`} />
                   </SelectTrigger>

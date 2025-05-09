@@ -12,9 +12,10 @@ interface ItemsListProps {
   items: ItemType[];
   itemKind: 'asset' | 'liability';
   onDeleteItem: (id: string, itemKind: 'asset' | 'liability') => void;
+  currency: string;
 }
 
-const ItemsList: FC<ItemsListProps> = ({ items, itemKind, onDeleteItem }) => {
+const ItemsList: FC<ItemsListProps> = ({ items, itemKind, onDeleteItem, currency }) => {
   const title = itemKind === 'asset' ? 'Assets' : 'Liabilities';
   const itemIconName = itemKind === 'asset' ? 'TrendingUp' : 'ShieldAlert';
   const itemTypes = itemKind === 'asset' ? ASSET_TYPES : LIABILITY_TYPES;
@@ -25,7 +26,12 @@ const ItemsList: FC<ItemsListProps> = ({ items, itemKind, onDeleteItem }) => {
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(value);
+    } catch (error) {
+      console.warn(`Invalid currency code: ${currency}. Falling back to USD display.`);
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    }
   };
 
   return (
@@ -41,50 +47,52 @@ const ItemsList: FC<ItemsListProps> = ({ items, itemKind, onDeleteItem }) => {
         {items.length === 0 ? (
           <p className="text-muted-foreground">No {itemKind.toLowerCase()}s added yet.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px]">Icon</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell><Icon name={getItemIcon(item.type)} className="h-5 w-5 text-muted-foreground" /></TableCell>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell>{item.type}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.value)}</TableCell>
-                  <TableCell className="text-right">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label="Delete item">
-                          <Icon name="Trash2" className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the item "{item.name}".
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => onDeleteItem(item.id, itemKind)}>
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px] sm:w-[100px]">Icon</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                  <TableHead className="text-right w-[80px]">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell><Icon name={getItemIcon(item.type)} className="h-5 w-5 text-muted-foreground" /></TableCell>
+                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell>{item.type}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.value)}</TableCell>
+                    <TableCell className="text-right">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label="Delete item">
+                            <Icon name="Trash2" className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the item "{item.name}".
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => onDeleteItem(item.id, itemKind)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
